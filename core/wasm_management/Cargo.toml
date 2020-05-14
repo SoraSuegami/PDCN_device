@@ -6,14 +6,12 @@ edition = "2018"
 
 [dependencies]
 sp-std = {git="https://github.com/paritytech/substrate.git", version="2.0.0-dev", default_features = false}
-#sp-core = {git="https://github.com/paritytech/substrate.git", version="2.0.0-dev", default_features = false}
 hash-db = { version = "0.15.2", default-features = false }
 parity-wasm = { version = "0.41", default-features = false }
 wasmi = {git="https://github.com/paritytech/wasmi.git", version = "0.6.2", default-features = false, features = ["core"]}
 no-std-compat = "0.4.0"
 failure = {version="0.1.6", default-features = false, features = ["derive"]}
 hex = { version = "0.4", default-features = false }
-#wasm-bindgen = {version="0.2.62", default-features = false }
 #wasm3 = { git = "https://github.com/Veykril/wasm3-rs.git" }
 
 [features]
