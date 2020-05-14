@@ -1,11 +1,6 @@
 extern crate wasmi;
 use wasmi::{RuntimeValue};
 use sp_std::{vec};
-//use core::hash::{BuildHasher,BuildHasherDefault};
-//use no_std_compat::marker::PhantomData;
-//use crate::error::{ModuleInstanceError,ModuleRunError};
-//use core::str;
-//use core::convert::TryInto;
 use hex::{encode,FromHexError};
 use hash_db::Hasher;
 pub struct ModuleId<H:Hasher>(<H as Hasher>::Out);
@@ -37,57 +32,3 @@ impl<H:Hasher> From<&[u8]> for ModuleId<H> {
         Self(H::hash(buffer))
     }
 }
-
-
-/*pub struct Pure();
-pub struct Input();
-pub struct Output();
-
-pub struct Module<I:ImportResolver,E:Externals,Type> {
-    module:wasmi::Module,
-    import:PhantomData<I>,
-    external:PhantomData<E>,
-    module_type:PhantomData<Type>
-}
-
-
-
-impl<I:ImportResolver,E:Externals,Type> Module<I,E,Type> {
-    /*pub fn new<H:Hasher+Default>(buffer:&[u8]) -> Result<Self,ModuleInstanceError> {
-        let module = wasmi::Module::from_buffer(buffer).map_err(|e| ModuleInstanceError::InstanceError{error: e})?;
-        let mut hasher_state = H::default();
-        buffer.hash(&mut hasher_state);
-        let code_hash = hasher_state.finish();
-        Ok(Self {
-            module:module,
-            import:PhantomData,
-            external:PhantomData,
-            module_type:PhantomData
-        })
-    }*/
-
-    pub fn new<H:Hasher>(buffer:&[u8]) -> Result<(Self,ModuleId<H>),ModuleInstanceError> {
-        let module = wasmi::Module::from_buffer(buffer).map_err(|e| ModuleInstanceError::InstanceError{error: e})?;
-        let id = ModuleId::from(buffer);
-        Ok((
-            Self {
-                module:module,
-                import:PhantomData,
-                external:PhantomData,
-                module_type:PhantomData
-            },
-            id
-        ))
-    }
-
-    pub fn instance(&self,import:&I)->Result<NotStartedModuleRef,ModuleInstanceError> {
-        ModuleInstance::new(&self.module, import).map_err(|e| ModuleInstanceError::InstanceError{error: e})
-    }
-
-    pub fn run(&mut self,func_name:&str,args:&[RuntimeValue],import:&I,state:&mut E)->Result<Option<RuntimeValue>,ModuleRunError> {
-        let instance = self.instance(import).map_err(|e| ModuleRunError::InstanceError{error: e})?;
-        let started = instance.run_start(state).map_err(|e| ModuleRunError::TrapError{error: e})?;
-        started.invoke_export(func_name, args, state).map_err(|e| ModuleRunError::RunError{error: e})
-    }
-}
-*/
