@@ -32,3 +32,9 @@ impl<H:Hasher> From<&[u8]> for ModuleId<H> {
         Self(H::hash(buffer))
     }
 }
+
+impl<H:Hasher> PartialEq for ModuleId<H> {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_hash() == other.as_hash()
+    }
+}
