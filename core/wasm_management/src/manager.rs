@@ -1,5 +1,6 @@
 extern crate wasmi;
-use wasmi::{Module, ModuleInstance, ModuleRef, ImportsBuilder, RuntimeValue};
+use wasmi::{Module, ModuleInstance, ModuleRef, ImportsBuilder, RuntimeValue, MemoryInstance, MemoryRef};
+use wasmi::memory_units::*;
 use parity_wasm::elements::{Module as RawModule};
 use sp_std::{vec};
 use sp_std::str::from_utf8;
@@ -12,6 +13,7 @@ pub trait ManagementHelper:Sized+Default {
     type Hash:Hasher;
     type Host:HostTrait;
     const ENTRY_FUNC:&'static str;
+    const ENTRY_MEMORY:&'static str;
     const HOST_MODULE:&'static str;
     const VERIFY_MODULE:&'static str;
     const HOST_OBJECT:Self::Host;
@@ -69,21 +71,42 @@ impl<Helper:ManagementHelper> ModuleManager<Helper> {
         })
     }
 
-    pub fn call_module(& self,module_id:&ModuleId<Helper::Hash>,args:&[RuntimeValue]) -> Result<Option<RuntimeValue>,ManagerError> {
+    pub fn call_module(& self,module_id:&ModuleId<Helper::Hash>,runtime_args:&[RuntimeValue],memory_args:&[u8]) -> Result<(Option<RuntimeValue>,vec::Vec<u8>),ManagerError> {
+        /*let (runtime_args, pushed_memory) = args.into_iter().fold((runtime_args,memory,0), |(all_args, all_mem, offset), arg|{
+            match arg {
+                Arg::RuntimeValue => {
+                    all_args.push(arg);
+                    (all_args, all_mem, offset)
+                },
+
+                Arg::B => {
+                    let size = arg.len();
+                }
+            }
+        });*/
         let module_ref = self.helper.get_ref_of_id(module_id).unwrap();
-        module_ref.invoke_export(Helper::ENTRY_FUNC,args,&mut Helper::HOST_OBJECT).map_err(|e| ManagerError::InvokeError{error:e})
+        let externals = module_ref.export_by_name(Helper::ENTRY_MEMORY).unwrap();
+        let memory = externals.as_memory().unwrap();
+        memory.set(0, memory_args).unwrap();
+        let results = module_ref.invoke_export(Helper::ENTRY_FUNC,runtime_args,&mut Helper::HOST_OBJECT).map_err(|e| ManagerError::InvokeError{error:e})?;
+        let size = memory.current_size().0;
+        let memory_vec = memory.get(0, size).unwrap();
+        Ok((results, memory_vec))
     }
 
-    pub fn call_module_with_verification(&mut self,module_id:ModuleId<Helper::Hash>,args:&[RuntimeValue]) -> Result<(Option<RuntimeValue>,Option<RuntimeValue>),ManagerError> {
-        let module_hash = module_id.as_wasm_values();
-        let result1 = self.call_module(&module_id,args)?;
-        let result1_vec = match result1 {
+    pub fn call_module_with_verification(&mut self,module_id:ModuleId<Helper::Hash>,runtime_args:&[RuntimeValue],memory_args:&[u8]) -> Result<[(Option<RuntimeValue>,vec::Vec<u8>);2],ManagerError> {
+        let module_hash = module_id.as_slice();
+        let (rersult1_values,result1_memory) = self.call_module(&module_id,runtime_args,memory_args)?;
+        let args_length = RuntimeValue::from(runtime_args.len() as i32);
+        let result1_values_vec:vec::Vec<RuntimeValue> = match rersult1_values {
             Some(val) => vec![val],
             None => vec::Vec::new()
         };
-        let args2:vec::Vec<RuntimeValue> = [&module_hash,args,&result1_vec].concat();
+        let memory_length = RuntimeValue::from(memory_args.len() as i32);
+        let args2:&[RuntimeValue] = &[vec![args_length,memory_length],runtime_args.to_vec(),result1_values_vec].concat()[..];
+        let memory_args2 = [memory_args, &result1_memory[..]].concat();
         let verify_id = ModuleId::from(Helper::VERIFY_MODULE.as_bytes());
-        let result2 = self.call_module(&verify_id,&args2)?;
-        Ok((result1, result2))
+        let result2 = self.call_module(&verify_id,args2,&memory_args2[..])?;
+        Ok([(rersult1_values,result1_memory), result2])
     }
 }

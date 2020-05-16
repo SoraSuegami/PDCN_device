@@ -1,5 +1,5 @@
 [package]
-name = "wasm_management"
+name = "pdcn_wasm_management"
 version = "0.1.0"
 authors = ['Sora Suegami']
 edition = "2018"
