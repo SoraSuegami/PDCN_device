@@ -1,6 +1,7 @@
 extern crate wasmi;
-use wasmi::{Module, ModuleInstance, ModuleRef, ImportsBuilder, RuntimeValue, MemoryInstance, MemoryRef};
+use wasmi::{Module, ModuleInstance, ModuleRef, ImportsBuilder, RuntimeValue, ValueType, FromRuntimeValue, MemoryInstance, MemoryRef};
 use wasmi::memory_units::*;
+use wasmi::nan_preserving_float::{F32, F64};
 use parity_wasm::elements::{Module as RawModule};
 use sp_std::{vec};
 use sp_std::str::from_utf8;
@@ -72,18 +73,6 @@ impl<Helper:ManagementHelper> ModuleManager<Helper> {
     }
 
     pub fn call_module(& self,module_id:&ModuleId<Helper::Hash>,runtime_args:&[RuntimeValue],memory_args:&[u8]) -> Result<(Option<RuntimeValue>,vec::Vec<u8>),ManagerError> {
-        /*let (runtime_args, pushed_memory) = args.into_iter().fold((runtime_args,memory,0), |(all_args, all_mem, offset), arg|{
-            match arg {
-                Arg::RuntimeValue => {
-                    all_args.push(arg);
-                    (all_args, all_mem, offset)
-                },
-
-                Arg::B => {
-                    let size = arg.len();
-                }
-            }
-        });*/
         let module_ref = self.helper.get_ref_of_id(module_id).unwrap();
         let externals = module_ref.export_by_name(Helper::ENTRY_MEMORY).unwrap();
         let memory = externals.as_memory().unwrap();
@@ -91,22 +80,48 @@ impl<Helper:ManagementHelper> ModuleManager<Helper> {
         let results = module_ref.invoke_export(Helper::ENTRY_FUNC,runtime_args,&mut Helper::HOST_OBJECT).map_err(|e| ManagerError::InvokeError{error:e})?;
         let size = memory.current_size().0;
         let memory_vec = memory.get(0, size).unwrap();
+        memory.zero(0, memory.maximum().unwrap().0).unwrap();
         Ok((results, memory_vec))
     }
 
     pub fn call_module_with_verification(&mut self,module_id:ModuleId<Helper::Hash>,runtime_args:&[RuntimeValue],memory_args:&[u8]) -> Result<[(Option<RuntimeValue>,vec::Vec<u8>);2],ManagerError> {
         let module_hash = module_id.as_slice();
+        let module_hash_length = RuntimeValue::from(module_hash.len() as i32);
         let (rersult1_values,result1_memory) = self.call_module(&module_id,runtime_args,memory_args)?;
-        let args_length = RuntimeValue::from(runtime_args.len() as i32);
-        let result1_values_vec:vec::Vec<RuntimeValue> = match rersult1_values {
-            Some(val) => vec![val],
+        let runtime_args_length = RuntimeValue::from(runtime_args.len() as i32);
+        let runtime_args_vec:vec::Vec<u8> = runtime_args.into_iter().fold(vec::Vec::<u8>::new(),|mut all,val|{
+            all.append(&mut Self::runtime2vec(val));
+            all
+        });
+        let result1_value_vec:vec::Vec<u8> = match rersult1_values {
+            Some(val) => Self::runtime2vec(&val),
             None => vec::Vec::new()
         };
-        let memory_length = RuntimeValue::from(memory_args.len() as i32);
-        let args2:&[RuntimeValue] = &[vec![args_length,memory_length],runtime_args.to_vec(),result1_values_vec].concat()[..];
-        let memory_args2 = [memory_args, &result1_memory[..]].concat();
+        let result1_value_length = RuntimeValue::from(result1_value_vec.len() as i32);
+        let memory_args_length = RuntimeValue::from(memory_args.len() as i32);
+        let result1_memory_length = RuntimeValue::from(result1_memory.len() as i32);
+        let runtime_args2:&[RuntimeValue] = &[vec![module_hash_length, runtime_args_length, result1_value_length, memory_args_length, result1_memory_length]].concat()[..];
+        let memory_args2 = [module_hash,&runtime_args_vec[..],&result1_value_vec[..],memory_args, &result1_memory[..]].concat();
         let verify_id = ModuleId::from(Helper::VERIFY_MODULE.as_bytes());
-        let result2 = self.call_module(&verify_id,args2,&memory_args2[..])?;
+        let result2 = self.call_module(&verify_id,runtime_args2,&memory_args2[..])?;
         Ok([(rersult1_values,result1_memory), result2])
+    }
+
+    fn runtime2vec(val:&RuntimeValue) -> vec::Vec<u8> {
+        match val.value_type() {
+            ValueType::I32 => {
+                val.try_into::<i32>().unwrap().to_be_bytes().to_vec()
+            },
+            ValueType::I64 => {
+                val.try_into::<i64>().unwrap().to_be_bytes().to_vec()
+            },
+            ValueType::F32 => {
+                val.try_into::<F32>().unwrap().to_float().to_be_bytes().to_vec()
+            },
+            ValueType::F64 => {
+                val.try_into::<F64>().unwrap().to_float().to_be_bytes().to_vec()
+            },
+            _ => vec::Vec::new()
+        }
     }
 }
