@@ -1,4 +1,3 @@
-  
 extern crate failure;
 use failure::Fail;
 use wasmi::{Error,Trap};

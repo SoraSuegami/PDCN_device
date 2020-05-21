@@ -1,4 +1,6 @@
 [workspace]
 members = [
     'core/wasm_management',
+    'systems/crypto',
+    'wasm_apps/attestation'
 ]
