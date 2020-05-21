@@ -1,40 +1,51 @@
 extern crate wasmi;
-use wasmi::{Module, ModuleInstance, ModuleRef, ImportsBuilder, RuntimeValue, ValueType, FromRuntimeValue, MemoryInstance, MemoryRef};
+use wasmi::{Module, ModuleInstance, ModuleRef, ImportsBuilder, RuntimeValue, ValueType};
 use wasmi::memory_units::*;
 use wasmi::nan_preserving_float::{F32, F64};
 use parity_wasm::elements::{Module as RawModule};
+use parity_wasm::builder::{ModuleBuilder};
 use sp_std::{vec};
 use sp_std::str::from_utf8;
 use crate::module_id::{ModuleId};
 use hash_db::Hasher;
 use crate::error::{ManagerError};
-use crate::host::{Host as HostTrait};
+use crate::host::Host as HostTrait;
 
-pub trait ManagementHelper:Sized+Default {
+pub trait ManagementHelper:Sized {
     type Hash:Hasher;
-    type Host:HostTrait;
     const ENTRY_FUNC:&'static str;
     const ENTRY_MEMORY:&'static str;
     const HOST_MODULE:&'static str;
     const VERIFY_MODULE:&'static str;
-    const HOST_OBJECT:Self::Host;
-    fn import(self, module_id:ModuleId<Self::Hash>, module:ModuleRef) -> Self;
+    fn import_module(self, module_id:ModuleId<Self::Hash>, module:ModuleRef) -> Self;
     fn get_ref_of_id(&self, module_id:&ModuleId<Self::Hash>) -> Option<&ModuleRef>;
 }
 
-pub struct ModuleManager<Helper:ManagementHelper> {
-    helper:Helper
+pub struct ModuleManager<Helper:ManagementHelper,Host:HostTrait> {
+    helper:Helper,
+    host:Host
 }
 
-impl<Helper:ManagementHelper> ModuleManager<Helper> {
-    pub fn new(helper:Helper) -> Self {
+impl<Helper:ManagementHelper,Host:HostTrait> ModuleManager<Helper,Host> {
+    pub fn new(helper:Helper,host:Host) -> Self {
         Self {
-            helper:helper
+            helper:helper,
+            host:host
         }
     }
 
-    pub fn add_module(self,bytes:&[u8]) -> Result<Self,ManagerError> {
-        let raw_module = RawModule::from_bytes(bytes).unwrap();
+    pub fn add_module(mut self,bytes:&[u8]) -> Result<Self,ManagerError> {
+        let raw_module:RawModule = ModuleBuilder::new()
+            .with_module(RawModule::from_bytes(bytes).unwrap())
+            /*.memory()
+                .build()
+            .export()
+                .field(Helper::ENTRY_MEMORY)
+                .internal()
+                    .memory(0)
+                .build()*/
+            .build();
+        
         let imported_module_ids:vec::Vec<ModuleId<Helper::Hash>> = match raw_module.import_section() {
             None => vec::Vec::new(),
             Some(imports) => {
@@ -52,8 +63,8 @@ impl<Helper:ManagementHelper> ModuleManager<Helper> {
             .map(|id| self.helper.get_ref_of_id(id).unwrap())
             .collect::<vec::Vec<&ModuleRef>>();
         
-        let host_object = Helper::HOST_OBJECT;
-        let mut builder = ImportsBuilder::new().with_resolver(Helper::HOST_MODULE, &host_object);
+        //let host_object = Helper::HOST_OBJECT;
+        let mut builder = ImportsBuilder::new().with_resolver(Helper::HOST_MODULE, &self.host);
         for (i,id) in imported_module_ids.into_iter().enumerate() {
             let module_ref = imported_module_refs.get(i).unwrap().clone();
             let module_vec = id.to_string_vec().unwrap();
@@ -64,23 +75,33 @@ impl<Helper:ManagementHelper> ModuleManager<Helper> {
         let module_id:ModuleId<Helper::Hash> = ModuleId::from(bytes);
         let module_ref = ModuleInstance::new(&module,&builder)
             .map_err(|e| ManagerError::InstanceError{error: e})?
-            .run_start(&mut Helper::HOST_OBJECT)
+            .run_start(&mut self.host)
             .map_err(|e| ManagerError::RunError{trap:e})?;
-        let imported = self.helper.import(module_id, module_ref);
+        let imported = self.helper.import_module(module_id, module_ref);
         Ok(Self {
-            helper:imported        
+            helper:imported,
+            host:self.host
         })
     }
 
-    pub fn call_module(& self,module_id:&ModuleId<Helper::Hash>,runtime_args:&[RuntimeValue],memory_args:&[u8]) -> Result<(Option<RuntimeValue>,vec::Vec<u8>),ManagerError> {
-        let module_ref = self.helper.get_ref_of_id(module_id).unwrap();
+    pub fn call_module(&mut self,module_id:&ModuleId<Helper::Hash>,runtime_args:&[RuntimeValue],memory_args:&[u8]) -> Result<(Option<RuntimeValue>,vec::Vec<u8>),ManagerError> {
+        let helper = &self.helper;
+        let module_ref = helper.get_ref_of_id(module_id).unwrap();
         let externals = module_ref.export_by_name(Helper::ENTRY_MEMORY).unwrap();
-        let memory = externals.as_memory().unwrap();
+        //let exported_memory =  externals.as_memory().unwrap().clone();
+        //let imported = self.helper.import_memory(exported_memory);
+        let memory = self.host.get_memory().unwrap();//externals.as_memory().unwrap();
+        memory.grow(Pages(memory_args.len())).unwrap();
         memory.set(0, memory_args).unwrap();
-        let results = module_ref.invoke_export(Helper::ENTRY_FUNC,runtime_args,&mut Helper::HOST_OBJECT).map_err(|e| ManagerError::InvokeError{error:e})?;
+        //self.helper.set_to_memory(0, memory_args).unwrap();
+        //let helper_as_external = &mut self.helper;
+        let results = module_ref.invoke_export(Helper::ENTRY_FUNC,runtime_args, &mut self.host).map_err(|e| ManagerError::InvokeError{error:e})?;
         let size = memory.current_size().0;
         let memory_vec = memory.get(0, size).unwrap();
-        memory.zero(0, memory.maximum().unwrap().0).unwrap();
+        //memory.set(0, memory_args).unwrap();
+        //self.helper.set_to_memory(0, memory_args).unwrap();
+        //self.helper.init_memory(size).unwrap();
+        memory.zero(0,size).unwrap();
         Ok((results, memory_vec))
     }
 
@@ -120,8 +141,7 @@ impl<Helper:ManagementHelper> ModuleManager<Helper> {
             },
             ValueType::F64 => {
                 val.try_into::<F64>().unwrap().to_float().to_be_bytes().to_vec()
-            },
-            _ => vec::Vec::new()
+            }
         }
     }
 }
