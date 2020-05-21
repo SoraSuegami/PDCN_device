@@ -37,13 +37,6 @@ impl<Helper:ManagementHelper,Host:HostTrait> ModuleManager<Helper,Host> {
     pub fn add_module(mut self,bytes:&[u8]) -> Result<Self,ManagerError> {
         let raw_module:RawModule = ModuleBuilder::new()
             .with_module(RawModule::from_bytes(bytes).unwrap())
-            /*.memory()
-                .build()
-            .export()
-                .field(Helper::ENTRY_MEMORY)
-                .internal()
-                    .memory(0)
-                .build()*/
             .build();
         
         let imported_module_ids:vec::Vec<ModuleId<Helper::Hash>> = match raw_module.import_section() {
@@ -63,7 +56,6 @@ impl<Helper:ManagementHelper,Host:HostTrait> ModuleManager<Helper,Host> {
             .map(|id| self.helper.get_ref_of_id(id).unwrap())
             .collect::<vec::Vec<&ModuleRef>>();
         
-        //let host_object = Helper::HOST_OBJECT;
         let mut builder = ImportsBuilder::new().with_resolver(Helper::HOST_MODULE, &self.host);
         for (i,id) in imported_module_ids.into_iter().enumerate() {
             let module_ref = imported_module_refs.get(i).unwrap().clone();
@@ -88,19 +80,12 @@ impl<Helper:ManagementHelper,Host:HostTrait> ModuleManager<Helper,Host> {
         let helper = &self.helper;
         let module_ref = helper.get_ref_of_id(module_id).unwrap();
         let externals = module_ref.export_by_name(Helper::ENTRY_MEMORY).unwrap();
-        //let exported_memory =  externals.as_memory().unwrap().clone();
-        //let imported = self.helper.import_memory(exported_memory);
         let memory = self.host.get_memory().unwrap();//externals.as_memory().unwrap();
         memory.grow(Pages(memory_args.len())).unwrap();
         memory.set(0, memory_args).unwrap();
-        //self.helper.set_to_memory(0, memory_args).unwrap();
-        //let helper_as_external = &mut self.helper;
         let results = module_ref.invoke_export(Helper::ENTRY_FUNC,runtime_args, &mut self.host).map_err(|e| ManagerError::InvokeError{error:e})?;
         let size = memory.current_size().0;
         let memory_vec = memory.get(0, size).unwrap();
-        //memory.set(0, memory_args).unwrap();
-        //self.helper.set_to_memory(0, memory_args).unwrap();
-        //self.helper.init_memory(size).unwrap();
         memory.zero(0,size).unwrap();
         Ok((results, memory_vec))
     }
