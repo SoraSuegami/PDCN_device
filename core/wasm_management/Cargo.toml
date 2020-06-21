@@ -13,6 +13,10 @@ no-std-compat = "0.4.0"
 failure = {version="0.1.6", default-features = false, features = ["derive"]}
 hex = { version = "0.4", default-features = false }
 #wasm3 = { git = "https://github.com/Veykril/wasm3-rs.git" }
+heapless = { version = "0.5.5" }
+id = {path = "../id", default-features = false}
+pdcn_system_crypto = {path="../../systems/crypto", default-features = false}
+
 
 [features]
 default = []

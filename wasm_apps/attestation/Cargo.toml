@@ -1,5 +1,5 @@
 [package]
-name = "wasm_attestation"
+name = "attestation"
 version = "0.1.0"
 authors = ['Sora Suegami']
 edition = "2018"
@@ -8,11 +8,12 @@ edition = "2018"
 #wasm-bindgen = "0.2.62"
 sp-std = {git="https://github.com/paritytech/substrate.git", version="2.0.0-dev", default_features = false}
 sp-core = {git="https://github.com/paritytech/substrate.git", version="2.0.0-dev", default_features = false}
-
+crypto = {path="../crypto", default_features = false}
+panic = {path="../panic"}
 
 [features]
 default = []
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib","rlib"]
 

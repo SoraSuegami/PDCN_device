@@ -1,6 +1,15 @@
 [workspace]
 members = [
-    'core/wasm_management',
+    'core/id',
     'systems/crypto',
-    'wasm_apps/attestation'
+    'core/wasm_management',
+    #'wasm_apps/attestation',
+    #'wasm_apps/systems/crypto'
+]
+
+exclude = [
+    'core/build',
+    'wasm_apps/panic',
+    'wasm_apps/attestation',
+    'wasm_apps/crypto',
 ]
