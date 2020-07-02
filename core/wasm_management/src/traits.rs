@@ -1,2 +1,2 @@
 pub use crate::manager::ManagementHelper;
-pub use crate::host::Host;
+pub use crate::host::{Host,HostBuilder};

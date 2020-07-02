@@ -1,7 +1,4 @@
-use wasmi::{MemoryRef, RuntimeArgs};
-use wasmi::memory_units::*;
-use hash_db::Hasher as HasherTrait;
-use sp_std::convert::TryFrom;
+use wasmi::{MemoryRef};
 use crate::error::CryptoError;
 use crate::key::{Key as KeyTrait, KeyBase};
 pub trait Signature {

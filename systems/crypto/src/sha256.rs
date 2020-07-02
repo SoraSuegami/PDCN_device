@@ -1,6 +1,4 @@
-use wasmi::{MemoryRef, RuntimeArgs};
-use wasmi::memory_units::*;
-use hash_db::Hasher as HasherTrait;
+use wasmi::{MemoryRef};
 use crate::error::CryptoError;
 pub trait Sha256 {
     type Hasher:Sha256Base;

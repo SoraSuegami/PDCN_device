@@ -10,3 +10,6 @@ hash-db = { version = "0.15.2", default-features = false }
 wasmi = {git="https://github.com/paritytech/wasmi.git", version = "0.6.2", default-features = false, features = ["core"]}
 hex = { version = "0.4", default-features = false }
 pdcn_system_crypto = {path="../../systems/crypto", default-features = false}
+
+[features]
+default = []

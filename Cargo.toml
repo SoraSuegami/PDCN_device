@@ -3,8 +3,6 @@ members = [
     'core/id',
     'systems/crypto',
     'core/wasm_management',
-    #'wasm_apps/attestation',
-    #'wasm_apps/systems/crypto'
 ]
 
 exclude = [
