@@ -14,7 +14,7 @@ pub trait ManagementHelper:Sized {
     const ENTRY_FUNC:&'static str;
     const ENTRY_MEMORY:&'static str;
     const HOST_MODULE:&'static str;
-    const VERIFY_MODULE:&'static str;
+    const ATTESTATION_MODULE:&'static str;
     fn bytes_of_id(id:&ModuleId<Self::Hash>) -> Option<&[u8]>;
 }
 
@@ -72,10 +72,11 @@ impl<Helper:ManagementHelper> ModuleManager<Helper> {
         let result1_memory_length = RuntimeValue::from(result1_memory.len() as i32);
         let storage1_length = RuntimeValue::from(storage1.len() as i32);
         let result1_storage_length = RuntimeValue::from(result1_storage.len() as i32);
+        let attestation_id = ModuleId::<Helper::Hash>::from(Helper::ATTESTATION_MODULE.as_bytes());
+        let attestation_hash =  attestation_id.as_slice();
         let runtime_args2:&[RuntimeValue] = &[vec![module_hash_length, runtime_args_length, result1_value_length, memory_args_length, result1_memory_length, storage1_length, result1_storage_length]].concat()[..];
-        let memory_args2 = [module_hash, &runtime_args_vec[..], &result1_value_vec[..], memory_args, &result1_memory[..], storage1, &result1_storage].concat();
-        let verify_id = ModuleId::from(Helper::VERIFY_MODULE.as_bytes());
-        let result2 = self.call_module::<Host>(&verify_id,runtime_args2,&memory_args2[..],storage2)?;
+        let memory_args2 = [module_hash, attestation_hash, &runtime_args_vec[..], &result1_value_vec[..], memory_args, &result1_memory[..], storage1, &result1_storage].concat();
+        let result2 = self.call_module::<Host>(&attestation_id,runtime_args2,&memory_args2[..],storage2)?;
         Ok([(rersult1_values,result1_memory,result1_storage), result2])
     }
 
