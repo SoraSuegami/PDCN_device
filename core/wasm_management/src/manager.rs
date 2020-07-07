@@ -18,18 +18,18 @@ pub trait ManagementHelper:Sized {
     fn bytes_of_id(id:&ModuleId<Self::Hash>) -> Option<&[u8]>;
 }
 
-pub struct ModuleManager<Helper:ManagementHelper> {
-    helper:PhantomData<Helper>
+pub struct ModuleManager<Helper:ManagementHelper,Host:HostTrait> {
+    helper:PhantomData<Helper>,
+    host:PhantomData<Host>
 }
 
-impl<Helper:ManagementHelper> ModuleManager<Helper> {
-    pub fn new() -> Self {
-        Self {
-            helper:PhantomData
-        }
-    }
-
-    pub fn call_module<Host:HostTrait>(&mut self,module_id:&ModuleId<Helper::Hash>,runtime_args:&[RuntimeValue],memory_args:&[u8],storage:&[u8]) -> Result<(Option<RuntimeValue>,vec::Vec<u8>,vec::Vec<u8>),ManagerError> {
+impl<Helper:ManagementHelper,Host:HostTrait> ModuleManager<Helper,Host> {
+    pub fn call_module (
+        module_id:&ModuleId<Helper::Hash>,
+        runtime_args:&[RuntimeValue],
+        memory_args:&[u8],
+        storage:&[u8]
+    ) -> Result<(Option<RuntimeValue>,vec::Vec<u8>,vec::Vec<u8>),ManagerError> {
         let bytes = Helper::bytes_of_id(module_id).unwrap();
         let mut host = HostBuilder::<Host>::new().build();
         let builder = ImportsBuilder::new().with_resolver(Helper::HOST_MODULE, &host);
@@ -45,7 +45,7 @@ impl<Helper:ManagementHelper> ModuleManager<Helper> {
         let memory_len = memory_args.len();
         memory.grow(Pages(storage_len+memory_len)).unwrap();
         memory.set(0, storage).unwrap();
-        memory.set(storage_len as u32, memory_args);
+        memory.set(storage_len as u32, memory_args).unwrap();
         let results = module_ref.invoke_export(Helper::ENTRY_FUNC,runtime_args, &mut host).map_err(|e| ManagerError::InvokeError{error:e})?;
         let size = memory.current_size().0;
         let storage_vec = memory.get(0, storage_len).unwrap();
@@ -54,10 +54,16 @@ impl<Helper:ManagementHelper> ModuleManager<Helper> {
         Ok((results, memory_vec, storage_vec))
     }
 
-    pub fn call_module_with_attestatione<Host:HostTrait>(&mut self,module_id:&ModuleId<Helper::Hash>,runtime_args:&[RuntimeValue],memory_args:&[u8],storage1:&[u8],storage2:&[u8]) -> Result<[(Option<RuntimeValue>,vec::Vec<u8>,vec::Vec<u8>);2],ManagerError> {
+    pub fn call_attestatione(
+        module_id:&ModuleId<Helper::Hash>,
+        input:(&[RuntimeValue],&[u8],&[u8]),
+        output:(Option<RuntimeValue>,&[u8],&[u8]),
+        storage2:&[u8]
+    ) -> Result<[(Option<RuntimeValue>,vec::Vec<u8>,vec::Vec<u8>);2],ManagerError> {
         let module_hash = module_id.as_slice();
         let module_hash_length = RuntimeValue::from(module_hash.len() as i32);
-        let (rersult1_values,result1_memory,result1_storage) = self.call_module::<Host>(module_id,runtime_args,memory_args,storage1)?;
+        let (runtime_args,memory_args,storage1) = input;
+        let (rersult1_values,result1_memory,result1_storage) = output;
         let runtime_args_length = RuntimeValue::from(runtime_args.len() as i32);
         let runtime_args_vec:vec::Vec<u8> = runtime_args.into_iter().fold(vec::Vec::<u8>::new(),|mut all,val| {
             all.append(&mut Self::runtime2vec(val));
@@ -75,9 +81,9 @@ impl<Helper:ManagementHelper> ModuleManager<Helper> {
         let attestation_id = ModuleId::<Helper::Hash>::from(Helper::ATTESTATION_MODULE.as_bytes());
         let attestation_hash =  attestation_id.as_slice();
         let runtime_args2:&[RuntimeValue] = &[vec![module_hash_length, runtime_args_length, result1_value_length, memory_args_length, result1_memory_length, storage1_length, result1_storage_length]].concat()[..];
-        let memory_args2 = [module_hash, attestation_hash, &runtime_args_vec[..], &result1_value_vec[..], memory_args, &result1_memory[..], storage1, &result1_storage].concat();
-        let result2 = self.call_module::<Host>(&attestation_id,runtime_args2,&memory_args2[..],storage2)?;
-        Ok([(rersult1_values,result1_memory,result1_storage), result2])
+        let memory_args2 = [module_hash, attestation_hash, &runtime_args_vec[..], &result1_value_vec[..], memory_args, result1_memory, storage1, result1_storage].concat();
+        let result2 = Self::call_module(&attestation_id,runtime_args2,&memory_args2[..],storage2)?;
+        Ok([(rersult1_values,result1_memory.to_vec(),result1_storage.to_vec()), result2])
     }
 
     fn runtime2vec(val:&RuntimeValue) -> vec::Vec<u8> {
