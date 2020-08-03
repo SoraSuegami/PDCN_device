@@ -4,6 +4,10 @@ pub trait Sha256 {
     type Hasher:Sha256Base;
     const SIZE:usize;
 
+    fn size() -> usize {
+        Self::SIZE
+    }
+
     fn hash(memory:&MemoryRef,data_ptr:u32,size:usize,new_ptr:u32) -> Result<(u32,usize),CryptoError> {
         let data = memory.get(data_ptr,size).unwrap();
         let hashed = Self::Hasher::hash(&data[..]);

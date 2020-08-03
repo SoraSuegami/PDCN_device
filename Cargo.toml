@@ -2,12 +2,12 @@
 members = [
     'core/id',
     'systems/crypto',
-    'core/wasm_management',
+    'core/wasm_executor'
 ]
 
 exclude = [
-    'core/build',
     'wasm_apps/panic',
     'wasm_apps/attestation',
     'wasm_apps/crypto',
+    'shell_parser'
 ]
